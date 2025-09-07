@@ -123,6 +123,8 @@ class GStreamerApp:
             self.video_source = str(Path(RESOURCES_ROOT_PATH_DEFAULT) / RESOURCES_VIDEOS_DIR_NAME / BASIC_PIPELINES_VIDEO_EXAMPLE_NAME)
         else:
             self.video_source = self.options_menu.input
+
+        print(self.video_source)
         if self.video_source == USB_CAMERA:
             self.video_source = get_usb_video_devices()
             if not self.video_source:
@@ -131,6 +133,7 @@ class GStreamerApp:
             else:
                 self.video_source = self.video_source[0]
         self.source_type = get_source_type(self.video_source)
+        print(self.source_type)
         self.frame_rate = self.options_menu.frame_rate
         self.user_data = user_data
         self.video_sink = GST_VIDEO_SINK
@@ -153,11 +156,37 @@ class GStreamerApp:
 
         self.sync = "false" if (self.options_menu.disable_sync or self.source_type != "file") else "true"
         self.show_fps = self.options_menu.show_fps
-
+        self.show_fps = True
         if self.options_menu.dump_dot:
             os.environ["GST_DEBUG_DUMP_DOT_DIR"] = os.getcwd()
         
         self.webrtc_frames_queue = None  # for appsink & GUI mode
+
+    def appsink_callback_x(self, appsink):
+        """
+        Callback function for the appsink element in the GStreamer pipeline.
+        This function is called when a new sample (frame) is available in the appsink (output from the pipeline).
+        For CPU inference: Get frame, run inference, display.
+        """
+        sample = appsink.emit('pull-sample')
+        if sample:
+            buffer = sample.get_buffer()
+            if buffer:
+                format, width, height = get_caps_from_pad(appsink.get_static_pad("sink"))
+                frame = get_numpy_from_buffer(buffer, format, width, height)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # convert from BGR to RGB
+
+                # TODO: Add CPU inference code here
+                # Example:
+                # detections = run_inference(frame)
+                # draw_detections(frame, detections)
+
+                # Display the frame
+                cv2.imshow("CPU Inference", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    self.shutdown()
+
+        return Gst.FlowReturn.OK
 
     def appsink_callback(self, appsink):
         """
@@ -184,7 +213,7 @@ class GStreamerApp:
     def create_pipeline(self):
         # Initialize GStreamer
         Gst.init(None)
-
+        print("Creating pipeline")
         pipeline_string = self.get_pipeline_string()
         try:
             self.pipeline = Gst.parse_launch(pipeline_string)
@@ -194,8 +223,9 @@ class GStreamerApp:
 
         # Connect to hailo_display fps-measurements
         if self.show_fps:
-            print("Showing FPS")
-            self.pipeline.get_by_name("hailo_display").connect("fps-measurements", self.on_fps_measurement)
+            hailo_display = self.pipeline.get_by_name("hailo_display")
+            if hailo_display:
+                hailo_display.connect("fps-measurements", self.on_fps_measurement)
 
         # Create a GLib Main Loop
         self.loop = GLib.MainLoop()
@@ -366,6 +396,7 @@ class GStreamerApp:
         except Exception as e:
             print(f"Error during cleanup: {e}", file=sys.stderr)
         finally:
+            cv2.destroyAllWindows()
             if self.error_occurred:
                 print("Exiting with error...", file=sys.stderr)
                 sys.exit(1)

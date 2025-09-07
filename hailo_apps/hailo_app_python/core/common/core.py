@@ -171,10 +171,6 @@ def get_resource_path(pipeline_name: str,
     # 1) Base resources root
     root = Path(RESOURCES_ROOT_PATH_DEFAULT)
 
-    # 2) Hailo architecture (for model directory)
-    arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
-    if not arch:
-        return None
 
     # 3) Shared object (so) and videos: model parameter is full filename
     if resource_type == RESOURCES_SO_DIR_NAME and model:
@@ -190,6 +186,11 @@ def get_resource_path(pipeline_name: str,
     if resource_type == DEFAULT_LOCAL_RESOURCES_PATH and model:
         return (root / DEFAULT_LOCAL_RESOURCES_PATH / model)
 
+    # 2) Hailo architecture (for model directory)
+    arch = os.getenv(HAILO_ARCH_KEY, detect_hailo_arch())
+    if not arch:
+        return None
+        
     # 4) Models: append architecture and .hef extension
     if resource_type == RESOURCES_MODELS_DIR_NAME:
         # specific model name provided

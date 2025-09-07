@@ -312,6 +312,42 @@ def FILE_SINK_PIPELINE(output_file='output.mkv', name='file_sink', bitrate=5000)
 
     return file_sink_pipeline
 
+def CPU_INFERENCE_PIPELINE(
+    model_path,
+    input_width=640,
+    input_height=640,
+    confidence_threshold=0.5,
+    nms_threshold=0.4,
+    name='cpu_inference'
+):
+    """
+    Creates a GStreamer pipeline string for CPU-based YOLO inference using appsink.
+    This pipeline prepares frames for CPU processing and provides them via appsink.
+
+    Args:
+        model_path (str): Path to the YOLO model file (.onnx, .pt, etc.).
+        input_width (int): Input width for the model. Defaults to 640.
+        input_height (int): Input height for the model. Defaults to 640.
+        confidence_threshold (float): Confidence threshold for detections. Defaults to 0.5.
+        nms_threshold (float): NMS threshold for filtering overlapping boxes. Defaults to 0.4.
+        name (str): Prefix name for pipeline elements. Defaults to 'cpu_inference'.
+
+    Returns:
+        str: A string representing the GStreamer pipeline for CPU inference.
+    """
+    # CPU inference pipeline using appsink to get frames in Python
+    cpu_inference_pipeline = (
+        f'{QUEUE(name=f"{name}_scale_q")} ! '
+        f'videoscale name={name}_videoscale n-threads=2 qos=false ! '
+        f'{QUEUE(name=f"{name}_convert_q")} ! '
+        f'videoconvert name={name}_videoconvert n-threads=2 ! '
+        f'video/x-raw, format=RGB, width={input_width}, height={input_height}, pixel-aspect-ratio=1/1 ! '
+        f'{QUEUE(name=f"{name}_appsink_q")} ! '
+        f'appsink name={name}_appsink emit-signals=true drop=true max-buffers=1 sync=false '
+    )
+
+    return cpu_inference_pipeline
+
 def USER_CALLBACK_PIPELINE(name='identity_callback'):
     """
     Creates a GStreamer pipeline string for the user callback element.
